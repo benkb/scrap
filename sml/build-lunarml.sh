@@ -1,4 +1,5 @@
 set -u
+
 #BUILD__COMPILER_HOME /Users/ben/build/lunarml/lunarml.git
 #BUILD__COMPILER_BIN /Users/ben/build/lunarml/lunarml.git/bin/lunarml
 #BUILD__COMPILER_LIB /Users/ben/build/lunarml/lunarml.git/lib/lunarml
@@ -9,15 +10,17 @@ set -u
 if [ $# -eq 0 ] ; then
     die "usage: <file>"
 else
-    file="$1"
-    shift
+    file="${1:-}"
+     [ -f "$file" ] || die "Err: invalid file"
+     shift
+
 
     target=
     if [ -n "${1:-}" ] ; then
         case "$1" in
             lua|luajit|lua-continuations|nodejs|nodejs-cps) target="$1";;
             *) 
-                echo "Err: invalid target '$2'" >&2 
+                echo "Err: invalid target '$1'" >&2 
                 exit 1
                 ;;
         esac

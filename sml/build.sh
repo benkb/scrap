@@ -3,19 +3,59 @@ set -u
 prn(){ printf "%s\n" "$*"; }
 die(){ echo "$@" >&2; exit 1; }
 fail(){ echo "Fail: $@" >&2;  }
+sourcing(){
+    local file="${1:-}"
+    [ -n "${file}" ] || die "Err file '${file}' is empty"
+    shift
 
-if [ -f 'build-vars.sh' ] ; then
-    . './build-vars.sh' || die "Err: could not load 'build-vars.sh'"
+    if [ -f "${file}" ] ; then
+        . "${file}" "$@" || die "Err: could not source '$file'"
+    else
+        die "Err: file not exists '${file}'"
+    fi
+}
+
+BUILD__CMD=
+while [ $# -gt 0 ] ; do
+    case "$1" in
+        -|--help) 'todo help' ;;
+        -*) die "usage: ..." ;;
+        print|run) 
+            BUILD__CMD="$1"
+            shift
+            break
+            ;;
+        *) die "invalid cmd. usage ..." ;;
+    esac
+    shift
+done
+
+
+BUILD__HAS_CONF=
+if [ -f 'build.conf' ] ; then
+    BUILD__HAS_CONF=1
+    sourcing 'build.conf'
 else
-    die "Err: 'build-vars.sh' missing"
+    if [ -f 'build-vars.sh' ] ; then
+        sourcing 'build-vars.sh'
+    else
+        die "Err: 'build-vars.sh' missing"
+    fi
 fi
-
 
 [ -z ${COMPILER_NAME+x} ] && die 'Err: var COMPILER_NAME unset'
 
-[ -z ${INTERP_NAME+x} ] && die 'Err: var INTERP_NAME unset'
-
 BUILD__FILE="build-${COMPILER_NAME}".sh
+
+if [ -n "$BUILD__HAS_CONF" ] ; then
+    if sourcing "$BUILD__FILE" "$@" ; then
+        exit 0
+    else
+        die "Err: could not run load__buildfile"
+    fi
+fi
+
+
 
 calculate_homedir(){
     local name="${1:-}"
@@ -131,35 +171,48 @@ if [ -n "${COMPILER_LIB:-}" ] ; then
 fi
 
 
-BUILD__INTERP_HOME=
-if [ -n "${INTERP_VERS_BASEDIR:-}" ] ; then
-    BUILD__INTERP_HOME="$(calculate_homedir "$INTERP_NAME" "${INTERP_VERS_BASEDIR:-}" "" "${INTERP_VERS:-}" "${INTERP_VERS_MINOR:-}")"
-elif [ -n "${INTERP_HOME:-}" ] ; then
-    BUILD__INTERP_HOME="$(calculate_homedir "$INTERP_NAME" "${INTERP_HOME:-}" "${INTERP_HOME_DEFAULT:-}" "${INTERP_VERS:-}" "${INTERP_VERS_MINOR:-}")"
+if [ -n "${INTERP_NAME:-}" ] ; then
+    BUILD__INTERP_HOME=
+    if [ -n "${INTERP_VERS_BASEDIR:-}" ] ; then
+        BUILD__INTERP_HOME="$(calculate_homedir "$INTERP_NAME" "${INTERP_VERS_BASEDIR:-}" "" "${INTERP_VERS:-}" "${INTERP_VERS_MINOR:-}")"
+    elif [ -n "${INTERP_HOME:-}" ] ; then
+        BUILD__INTERP_HOME="$(calculate_homedir "$INTERP_NAME" "${INTERP_HOME:-}" "${INTERP_HOME_DEFAULT:-}" "${INTERP_VERS:-}" "${INTERP_VERS_MINOR:-}")"
+    fi
+
+    [ -d "$BUILD__INTERP_HOME" ] || die "Err: could not set compiler_homedir under '$BUILD__INTERP_HOME'"
+
+    BUILD__INTERP_BIN="$(calculate_bin "${INTERP_NAME:-}" "$BUILD__INTERP_HOME")" || die "Err: could not calculate"
+
+
+    BUILD__INTERP_LIB=
+    if [ -n "${INTERP_LIB:-}" ] ; then
+        BUILD__INTERP_LIB="$(calculate_lib "${INTERP_LIB:-}" "$BUILD__INTERP_HOME")" || die "Err: could not calculate interp lib"
+    fi
 fi
 
-[ -d "$BUILD__INTERP_HOME" ] || die "Err: could not set compiler_homedir under '$BUILD__INTERP_HOME'"
 
-BUILD__INTERP_BIN="$(calculate_bin "${INTERP_NAME:-}" "$BUILD__INTERP_HOME")" || die "Err: could not calculate"
+build__print(){
+    echo "COMPILER_NAME='$COMPILER_NAME'"
+    echo "BUILD__COMPILER_HOME='$BUILD__COMPILER_HOME'"
+    echo "BUILD__COMPILER_BIN='$BUILD__COMPILER_BIN'"
+    echo "BUILD__COMPILER_LIB='$BUILD__COMPILER_LIB'"
+    echo "BUILD__INTERP_HOME='$BUILD__INTERP_HOME'"
+    echo "BUILD__INTERP_BIN='$BUILD__INTERP_BIN'"
+    echo "BUILD__INTERP_LIB='$BUILD__INTERP_LIB'"
+}
+
+case "$BUILD__CMD" in
+    print) 
+        build__print 
+        exit 0
+        ;;
+    run) : ;;
+    *) die "Err: unknown command";;
+esac
 
 
-BUILD__INTERP_LIB=
-if [ -n "${INTERP_LIB:-}" ] ; then
-    BUILD__INTERP_LIB="$(calculate_lib "${INTERP_LIB:-}" "$BUILD__INTERP_HOME")" || die "Err: could not calculate interp lib"
-fi
-
-
-#echo BUILD__COMPILER_HOME $BUILD__COMPILER_HOME
-#echo BUILD__COMPILER_BIN $BUILD__COMPILER_BIN
-#echo BUILD__COMPILER_LIB $BUILD__COMPILER_LIB
-#
-#echo BUILD__INTERP_HOME $BUILD__INTERP_HOME
-#echo BUILD__INTERP_BIN $BUILD__INTERP_BIN
-#echo BUILD__INTERP_LIB $BUILD__INTERP_LIB
-
-
-if [ -f "$BUILD__FILE" ] ; then
-    source  "$BUILD__FILE"
+if sourcing "$BUILD__FILE" "$@" ; then
+    exit 0
 else
-    die "Err: buildfile not exists '$BUILD__FILE'"
+    die "Err: could not run load__buildfile"
 fi
