@@ -1,3 +1,6 @@
 **/out
 **/*.swp
 **/debug
+**/obj
+**/out.*
+**/*.cache
